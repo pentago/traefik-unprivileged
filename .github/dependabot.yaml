@@ -1,0 +1,16 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+    labels:
+      - "automated"
+    target-branch: dev
+    groups:
+      github:
+        patterns:
+          - "*"

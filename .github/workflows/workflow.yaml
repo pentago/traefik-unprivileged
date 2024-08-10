@@ -1,0 +1,198 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - dev
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+
+  build:
+    name: Building Images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+          - linux/arm/v6
+          - linux/arm/v7
+          - linux/ppc64le
+          - linux/s390x
+          - linux/riscv64
+
+    steps:
+
+      - name: Checking Out Branch
+        uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Docker Setup QEMU
+        uses: docker/setup-qemu-action@v3.2.0
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        id: buildx_build
+        uses: docker/setup-buildx-action@v3.6.1
+
+      - name: Build Docker Image
+        id: docker_build
+        uses: docker/build-push-action@v6.5.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          provenance: mode=max
+          outputs: |
+            type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && 'true' || 'false' }}
+          labels: |
+            "commit=${{ github.sha }}"
+            "commit_url=${{ env.COMMIT_URL }}"
+            "workflow_run=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Export Image Digests
+        id: digest-prep
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.docker_build.outputs.digest }}"
+          echo "manifest-hash=${digest#sha256:}" >> "$GITHUB_OUTPUT"
+          # touch "/tmp/digests/${digest#sha256:}"
+          echo "${digest#sha256:}" > "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload Image Digests
+        uses: actions/upload-artifact@v4.3.5
+        with:
+          name: docker-digests-${{ steps.digest-prep.outputs.manifest-hash }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  test:
+    name: Running Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      fail-fast: true
+
+    steps:
+
+      - name: Checking Out Branch
+        uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        id: buildx_test
+        uses: docker/setup-buildx-action@v3.6.1
+
+      - name: Build Docker Image
+        id: docker_test
+        uses: docker/build-push-action@v6.5.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:latest
+          load: true
+
+      - name: Test Docker Image
+        run: |
+          sed 's|TRAEFIK_ROOTLES_IMAGE|${{ env.IMAGE_NAME }}|g' tests/compose.yaml > compose.yaml
+          docker compose up -d
+          sleep 5
+          curl --fail --location --verbose http://localhost:8080/whoami || (docker logs traefik && exit 1)
+
+  publish:
+    name: Publishing Multi-Arch Image
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+
+      - name: Set Utility Environment Variables
+        run: |
+          echo "TRAEFIK_VERSION=$(grep 'ARG TRAEFIK_VERSION' Dockerfile | cut -d '=' -f2)" >> $GITHUB_ENV
+
+      - name: Download Image Digests
+        uses: actions/download-artifact@v4.1.8
+        with:
+          path: /tmp/digests
+          pattern: docker-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.6.1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5.5.1
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr,prefix=pr-
+            type=semver,pattern={{version}}
+          flavor: |
+            latest=true
+
+      - name: Create Manifest List and Push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+
+      - name: Scan Docker Image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+            image-ref: ${{ env.IMAGE_NAME }}:latest
+            scan-type: image
+            format: 'github'
+            output: 'sbom.json'
+            exit-code: '0'
+            ignore-unfixed: true
+            vuln-type: 'os,library'
+            severity: 'CRITICAL,HIGH,MEDIUM'
+            github-pat: ${{ secrets.GITHUB_TOKEN }}
+            scanners: "vuln"
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4.3.5
+        with:
+          name: trivy-sbom-report
+          path: '${{ github.workspace }}/sbom.json'
+          retention-days: 90

@@ -1,0 +1,59 @@
+name: Quality Check
+
+on:
+  pull_request:
+    branches-ignore:
+      - main
+
+jobs:
+
+  lint:
+    name: Linting and Validation
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checking Out Branch
+        uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Linting Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Linting Test YAML Files
+        run: |
+          yamllint -s tests/*.yaml
+
+      - name: Linting Docs
+        uses: DavidAnson/markdownlint-cli2-action@v16.0.0
+        with:
+          globs: |
+            README.md
+
+      - name: Create Status Check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: always()
+        run: |
+          if [[ "${{ steps.lint.outputs.exit_code }}" == "0" ]]; then
+            echo "Linting passed"
+            gh api \
+              -H "Accept: application/vnd.github.v3+json" \
+              /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+              -f state=success \
+              -f target_url=${{ steps.lint.outputs.log_url }} \
+              -f description="Linting checks passed" \
+              -f context="Quality Check"
+          else
+            echo "Linting failed"
+            gh api \
+              -H "Accept: application/vnd.github.v3+json" \
+              /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+              -f state=failure \
+              -f target_url=${{ steps.lint.outputs.log_url }} \
+              -f description="Linting checks failed" \
+              -f context="Quality Check"
+          fi
