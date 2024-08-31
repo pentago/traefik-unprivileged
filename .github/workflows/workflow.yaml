@@ -61,7 +61,7 @@ jobs:
 
       - name: Build Docker Image
         id: docker_build
-        uses: docker/build-push-action@v6.6.1
+        uses: docker/build-push-action@v6.7.0
         with:
           context: .
           file: Dockerfile
@@ -84,7 +84,7 @@ jobs:
           echo "${digest#sha256:}" > "/tmp/digests/${digest#sha256:}"
 
       - name: Upload Image Digests
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: docker-digests-${{ steps.digest-prep.outputs.manifest-hash }}
           path: /tmp/digests/*
@@ -111,7 +111,7 @@ jobs:
 
       - name: Build Docker Image
         id: docker_test
-        uses: docker/build-push-action@v6.6.1
+        uses: docker/build-push-action@v6.7.0
         with:
           context: .
           file: Dockerfile
@@ -191,7 +191,7 @@ jobs:
             scanners: "vuln"
 
       - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: trivy-sbom-report
           path: '${{ github.workspace }}/sbom.json'
