@@ -11,10 +11,6 @@ FROM traefik:$TRAEFIK_VERSION AS source
 FROM alpine:$ALPINE_VERSION AS build
 COPY --from=source /usr/local/bin/traefik /
 
-# Modification to allow running rootless while listening on low ports
-# RUN apk --no-cache add libcap
-# RUN setcap cap_net_bind_service=+ep /traefik
-
 # Final minimal image
 FROM scratch
 
