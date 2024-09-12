@@ -9,7 +9,6 @@ FROM traefik:$TRAEFIK_VERSION AS source
 
 # Rootless customization
 FROM alpine:$ALPINE_VERSION AS build
-COPY --from=source /usr/local/bin/traefik /
 
 # Final minimal image
 FROM scratch
@@ -20,7 +19,7 @@ LABEL org.opencontainers.image.base.name="scratch"
 
 COPY --from=source /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=source /usr/share/zoneinfo /usr/share/
-COPY --from=build /traefik /
+COPY --from=source /usr/local/bin/traefik /
 
 USER 1000:1000
 EXPOSE 8080 8443
