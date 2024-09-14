@@ -28,7 +28,7 @@ jobs:
           yamllint -s tests/*.yaml
 
       - name: Linting Docs
-        uses: DavidAnson/markdownlint-cli2-action@v16.0.0
+        uses: DavidAnson/markdownlint-cli2-action@v17.0.0
         with:
           globs: |
             README.md
