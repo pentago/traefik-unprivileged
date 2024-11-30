@@ -14,7 +14,7 @@ jobs:
     steps:
 
       - name: Checking Out Branch
-        uses: actions/checkout@v4.2.1
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
 
@@ -28,7 +28,7 @@ jobs:
           yamllint -s tests/*.yaml
 
       - name: Linting Docs
-        uses: DavidAnson/markdownlint-cli2-action@v17.0.0
+        uses: DavidAnson/markdownlint-cli2-action@v18.0.0
         with:
           globs: |
             README.md
