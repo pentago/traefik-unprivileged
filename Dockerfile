@@ -9,7 +9,7 @@ FROM traefik:$TRAEFIK_VERSION AS source
 
 # Rootless customization
 FROM alpine:$ALPINE_VERSION AS build
-RUN apk add --no-cache ca-certificates ca-certificates-bundle
+RUN apk add --no-cache --no-progress ca-certificates tzdata
 
 # Final minimal image
 FROM scratch
