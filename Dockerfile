@@ -16,9 +16,9 @@ LABEL org.opencontainers.image.base.name="traefik"
 
 RUN apk add --no-cache --no-progress ca-certificates tzdata && update-ca-certificates
 RUN mkdir -p /plugins-storage/sources && chown -R 1000:1000 /plugins-storage
-COPY --from=0 /usr/local/bin/traefik /
+COPY --from=0 /usr/local/bin/traefik /usr/local/bin
 
 USER 1000:1000
 EXPOSE 8080 8443
 VOLUME ["/tmp"]
-ENTRYPOINT ["/traefik"]
+ENTRYPOINT ["/usr/local/bin/traefik"]
