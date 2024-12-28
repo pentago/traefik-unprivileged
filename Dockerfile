@@ -1,8 +1,8 @@
 # https://github.com/traefik/traefik/releases
-ARG TRAEFIK_VERSION=v3.1.2
+ARG TRAEFIK_VERSION=v3.2.3
 
 # https://hub.docker.com/_/alpine
-ARG ALPINE_VERSION=3.20.3
+ARG ALPINE_VERSION=3.21.0
 
 # Official image
 FROM traefik:$TRAEFIK_VERSION AS source
