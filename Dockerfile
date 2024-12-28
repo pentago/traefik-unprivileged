@@ -5,23 +5,18 @@ ARG TRAEFIK_VERSION=v3.2.3
 ARG ALPINE_VERSION=3.21.0
 
 # Official image
-FROM traefik:$TRAEFIK_VERSION AS source
-
-# Rootless customization
-FROM alpine:$ALPINE_VERSION AS build
-RUN apk add --no-cache --no-progress ca-certificates tzdata
+FROM traefik:$TRAEFIK_VERSION
 
 # Final minimal image
-FROM scratch
+FROM alpine:$ALPINE_VERSION
 
 LABEL org.opencontainers.image.source="https://github.com/pentago/traefik-rootless"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.base.name="scratch"
+LABEL org.opencontainers.image.base.name="traefik"
 
-COPY --from=source /usr/local/bin/traefik /
-COPY --from=build /usr/share/zoneinfo /usr/share/
-COPY --from=build /etc/ssl /etc/
-COPY --from=build /usr/share/ca-certificates /usr/share/
+RUN apk add --no-cache --no-progress ca-certificates tzdata && update-ca-certificates
+RUN mkdir -p /plugins-storage/sources && chown -R 1000:1000 /plugins-storage
+COPY --from=0 /usr/local/bin/traefik /
 
 USER 1000:1000
 EXPOSE 8080 8443
